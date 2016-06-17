@@ -7,6 +7,7 @@
 //
 
 #import "XMSweepController.h"
+#import "Masonry.h"
 #import <AVFoundation/AVFoundation.h>
 @interface XMSweepController()<AVCaptureMetadataOutputObjectsDelegate>
 {
@@ -121,6 +122,18 @@
     [backBtn addTarget:self action:@selector(backToView:) forControlEvents:UIControlEventTouchUpInside];
     [backBtn setImage:[UIImage imageNamed:@"白色返回_想去"] forState:UIControlStateNormal];
     [self.view addSubview:backBtn];
+    //选取本地照片
+    UIImageView *imageV = [[UIImageView alloc]initWithImage:[UIImage imageNamed:@"erweima@3x"]];
+    imageV.userInteractionEnabled = YES;
+    //    imageV.frame = CGRectMake(280, 10, 35, 35);
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]initWithTarget:self action:@selector(chooseImage)];
+    [imageV addGestureRecognizer:tap];
+    [self.view addSubview:imageV];
+    [imageV mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.top.equalTo(self.view).with.offset(25);
+        make.right.equalTo(self.view).with.offset(-15);
+        make.size.mas_equalTo(CGSizeMake(35, 35));
+    }];
     
 }
 -(void)backToView:(UIButton *)sender
@@ -208,8 +221,58 @@
     
 }
 
-
-
+-(void)chooseImage
+{
+    UIImagePickerController *picker = [[UIImagePickerController alloc]init];
+    picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+    picker.delegate = self;
+    picker.allowsEditing = YES;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+//选中单张照片
+-(void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary<NSString *,id> *)info
+{
+    [picker dismissViewControllerAnimated:YES completion:nil];
+    __block UIImage *image = [info objectForKey:UIImagePickerControllerEditedImage];
+    if (!image) {
+        image = [info objectForKey:UIImagePickerControllerOriginalImage];
+    }
+    //系统自带的识别方法
+    CIDetector *detector = [CIDetector detectorOfType:CIDetectorTypeQRCode context:nil options:@{ CIDetectorAccuracy : CIDetectorAccuracyHigh }];
+    CGImageRef ref = (CGImageRef)image.CGImage;
+    CIImage *cii = [CIImage imageWithCGImage:ref];
+    NSArray *feacture = [detector featuresInImage:cii];
+    if (feacture.count >= 1) {
+        CIQRCodeFeature *feature = [feacture objectAtIndex:0];
+        NSString *scanResult = feature.messageString;
+        if (_didRecoiveBlock) {
+            self.didRecoiveBlock(scanResult);
+            
+            [self selfRemoveFromSuperview];
+        } else {
+            if (IS_VAILABLE_IOS8) {
+                UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"扫码" message:scanResult preferredStyle:UIAlertControllerStyleAlert];
+                [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull action) {
+                    [session startRunning];
+                }]];
+                [self presentViewController:alert animated:YES completion:nil];
+            } else {
+                UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"扫码" message:scanResult delegate:self cancelButtonTitle:@"好" otherButtonTitles:nil];
+                [alert show];
+            }
+        }
+    }
+}
+- (void)selfRemoveFromSuperview{
+    [session removeObserver:self forKeyPath:@"running" context:nil];
+    [UIView animateWithDuration:0.3 delay:0 options:UIViewAnimationOptionCurveEaseInOut animations:^{
+        self.view.alpha = 0;
+    } completion:^(BOOL finished) {
+        [self.view removeFromSuperview];
+        [self removeFromParentViewController];
+    }];
+    [[UIApplication sharedApplication] setStatusBarStyle:UIStatusBarStyleDefault animated:YES];
+}
 
 
 
